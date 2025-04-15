@@ -1,0 +1,438 @@
+---
+title: "Applied Statistics Project"
+output:
+  pdf_document: default
+  html_document: default
+date: "2025-03-22"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+About the Project:
+Academic performance is a key concern for students, as it directly impacts future opportunities. This study aims to analyze various factors that may influence students GPA, including program of study, gender, graduation year, and performance metrics such as Cumulative Grade Point Average (CGPA) and Semester Grade Point Average (SGPA). Understanding these factors can help students make informed decisions and improve their academic outcomes.
+To achieve this, we employ a multivariate linear regression model to examine the relationships between these variables and overall academic performance. This model allows us to identify which factors have the most significant impact on GPA and which have little to no effect. By analyzing plots and test hypotheses on our model, we can provide insights into the key determinants of student success.
+
+```{r }
+#SUMMARIZING VARIABLES
+#libraries
+library(ggplot2)
+library(GGally)
+library(dplyr)
+
+# Loading the dataset
+df <- read.csv("C:/Users/nalla/Downloads/academic_performance_dataset_V2.csv", stringsAsFactors = TRUE)
+
+# Convert categorical variables to factors
+df$Prog.Code <- as.factor(df$Prog.Code)
+df$Gender <- as.factor(df$Gender)
+
+# Summary statistics
+summary(df)
+```
+
+
+```{r cars}
+# Checking for missing values
+colSums(is.na(df))
+
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+#VISUALIZING RELATIONSHIPS USING ggpairs()
+# Pairwise plots using ggpairs()
+ggpairs(df, aes(color = Gender, alpha = 0.5), 
+        columns = c("CGPA", "CGPA100", "CGPA200", "CGPA300", "CGPA400", "SGPA"))
+
+# Save the plot as an image (optional)
+ggsave("pairwise_plot.png", width = 10, height = 10)
+
+```
+
+```{r}
+# Load required libraries
+library(ggplot2)
+library(dplyr)
+library(car)         # for vif()
+library(ggfortify)   # for autoplot() diagnostic plots
+
+
+# Fit the linear regression model
+model1 <- lm(CGPA ~ .-ID.No, #CGPA100 + CGPA200 + CGPA300 + CGPA400 + SGPA + Gender + Prog.Code,
+            data = df)
+model2<- lm(CGPA ~ SGPA + Gender + Prog.Code+YoG, data=df)
+model3<-lm(CGPA ~ SGPA + Gender +CGPA100 + CGPA200 + CGPA300 + CGPA400+YoG, data=df)
+# Model summary
+summary(model3)
+summary(model2)
+summary(model1)
+```
+```{r}
+library(caTools)
+
+df$High_Performer <- ifelse(df$CGPA >= 3.5, 1, 0)
+df$High_Performer <- as.factor(df$High_Performer)
+
+set.seed(123)  # for reproducibility
+split <- sample.split(df$High_Performer, SplitRatio = 0.7)
+train <- subset(df, split == TRUE)
+test <- subset(df, split == FALSE)
+
+cat("Training observations:", nrow(train), "\n")
+cat("Testing observations:", nrow(test), "\n")
+
+```
+```{r}
+model1train <- lm(CGPA ~ .-ID.No, #CGPA100 + CGPA200 + CGPA300 + CGPA400 + SGPA + Gender + Prog.Code,
+            data = train)
+model2train<- lm(CGPA ~ SGPA + Gender + Prog.Code+YoG, data=train)
+model3train<-lm(CGPA ~ SGPA + Gender +CGPA100 + CGPA200 + CGPA300 + CGPA400+YoG, data=train)
+model4train<-lm(CGPA ~ .-ID.No-SGPA, #CGPA100 + CGPA200 + CGPA300 + CGPA400 + SGPA + Gender + Prog.Code,
+            data = train)
+summary(model4train)
+summary(model3train)
+summary(model2train)
+summary(model1train)
+```
+```{r}
+model1test <- lm(CGPA ~ .-ID.No, #CGPA100 + CGPA200 + CGPA300 + CGPA400 + SGPA + Gender + Prog.Code,
+            data = test)
+model2test<- lm(CGPA ~ SGPA + Gender + Prog.Code+YoG, data=test)
+model3test<-lm(CGPA ~ SGPA + Gender +CGPA100 + CGPA200 + CGPA300 + CGPA400+YoG, data=test)
+model4test<-lm(CGPA ~ .-ID.No-SGPA, #CGPA100 + CGPA200 + CGPA300 + CGPA400 + SGPA + Gender + Prog.Code,
+            data = test)
+summary(model4test)
+
+summary(model3test)
+summary(model2test)
+summary(model1test)
+```
+```{r}
+# Calculate CGPA changes from year to year
+df$CGPA_Change_200 <- df$CGPA200 - df$CGPA100  # CGPA change from 1st to 2nd year
+df$CGPA_Change_300 <- df$CGPA300 - df$CGPA200  # CGPA change from 2nd to 3rd year
+df$CGPA_Change_400 <- df$CGPA400 - df$CGPA300  # CGPA change from 3rd to 4th year
+# Create categorical variables for each year-to-year CGPA trend
+df$CGPA_Trend_200 <- ifelse(df$CGPA_Change_200 > 0, "Increasing", 
+                             ifelse(df$CGPA_Change_200 < 0, "Decreasing", "No Change"))
+
+df$CGPA_Trend_300 <- ifelse(df$CGPA_Change_300 > 0, "Increasing", 
+                             ifelse(df$CGPA_Change_300 < 0, "Decreasing", "No Change"))
+
+df$CGPA_Trend_400 <- ifelse(df$CGPA_Change_400 > 0, "Increasing", 
+                             ifelse(df$CGPA_Change_400 < 0, "Decreasing", "No Change"))
+```
+
+```{r}
+# Add feature for number of years completed
+df$Years_Completed <- ave(df$YoG, df$ID.No, FUN = length)
+
+# Add feature for time from first year (or first year semester)
+df$Time_From_First_Semester <- df$Year - min(df$Year)
+
+
+
+
+```
+
+```{r}
+# Chi-Square test to check for trend in CGPA change from 1st to 2nd year
+chisq.test(table(df$CGPA_Trend_200))
+
+# Chi-Square test for 2nd to 3rd year
+chisq.test(table(df$CGPA_Trend_300))
+
+# Chi-Square test for 3rd to 4th year
+chisq.test(table(df$CGPA_Trend_400))
+```
+
+
+```{r}
+# ANOVA to check CGPA differences across the years
+anova_result <- aov(CGPA ~ Prog.Code + Gender + Years_Completed, data = df)
+summary(anova_result)
+
+```
+```{r}
+library(ggplot2)
+
+# Bar plot of CGPA trend for each year
+ggplot(df, aes(x = CGPA_Trend_200)) +
+  geom_bar(aes(fill = CGPA_Trend_200), color = "black", show.legend = FALSE) +
+  labs(title = "CGPA Trend from 1st to 2nd Year", x = "Trend", y = "Number of Students") +
+  scale_fill_manual(values = c("green", "red", "gray")) +
+  theme_minimal()
+
+```
+```{r}
+# Calculate average CGPA for each year
+library(tidyr)
+avg_CGPA <- df %>%
+  gather(key = "Year", value = "CGPA", CGPA100, CGPA200, CGPA300, CGPA400) %>%
+  mutate(Year = factor(Year, levels = c("CGPA100", "CGPA200", "CGPA300", "CGPA400"),
+                       labels = c("1st Year", "2nd Year", "3rd Year", "4th Year"))) %>%
+  group_by(Year) %>%
+  summarise(Avg_CGPA = mean(CGPA, na.rm = TRUE))
+
+ggplot(avg_CGPA, aes(x = Year, y = Avg_CGPA, group = 1)) +
+  geom_line(color = "blue", size = 1) +
+  geom_point(color = "red", size = 3) +
+  labs(title = "Average CGPA Progression Across Years", x = "Year", y = "Average CGPA") +
+  theme_minimal()
+
+```
+```{r}
+# Scatter plot of CGPA change in 2nd year vs. SGPA
+ggplot(df, aes(x = SGPA, y = CGPA_Change_200)) +
+  geom_point(aes(color = Prog.Code), alpha = 0.6) +
+  labs(title = "CGPA Change from 1st to 2nd Year vs. Secondary School CGPA (SGPA)",
+       x = "Secondary School CGPA (SGPA)", y = "CGPA Change (1st to 2nd Year)") +
+  theme_minimal()
+
+```
+```{r}
+# Load required packages
+library(caTools)
+
+# Create binary target variable
+df$High_Performer <- ifelse(df$CGPA >= 3.5, 1, 0)
+df$High_Performer <- as.factor(df$High_Performer)
+
+# Split into training and testing
+set.seed(123)
+split <- sample.split(df$High_Performer, SplitRatio = 0.7)
+train <- subset(df, split == TRUE)
+test <- subset(df, split == FALSE)
+
+# Full model with all predictors
+full_model <- glm(High_Performer ~ CGPA100 + CGPA200 + CGPA300 + CGPA400 + SGPA + Gender + Prog.Code,
+                  data = train, family = "binomial")
+
+# Stepwise regression (both directions by default)
+step_model <- step(full_model, direction = "both")
+
+# Summary of final stepwise-selected model
+summary(step_model)
+summary(full_model)
+step_trace <- capture.output(step(full_model, direction = "both", trace = 1))
+
+# Extract AIC values from trace output
+aic_values <- step_trace[grep("AIC=", step_trace)]
+aic_nums <- as.numeric(gsub(".*AIC=([0-9.]+).*", "\\1", aic_values))
+
+plot(aic_nums, type = "b", col = "blue", pch = 19,
+     xlab = "Step", ylab = "AIC",
+     main = "Stepwise Model Selection by AIC")
+```
+```{r}
+summary(full_model)
+plot(full_model)
+```
+
+```{r}
+library(pROC)
+# Predict class probabilities (for class = 1)
+log_probs <- predict(full_model, newdata = test, type = "response")
+
+roc_log <- roc(test$High_Performer, log_probs)
+
+auc(roc_log)
+# Plot ROC curve
+plot(roc_log, col = "blue", lwd = 2, main = "ROC Curve - Logistic Regression model")
+abline(a = 0, b = 1, col = "gray", lty = 2)  # Diagonal line (random guess)
+
+```
+```{r}
+#CONFUSION MATRIX ON TEST DATA
+
+# Predict probabilities on test data
+pred_prob <- predict(full_model, newdata = test, type = "response")
+
+# Convert probabilities to class labels (0 or 1) using a threshold of 0.5
+pred_class <- ifelse(pred_prob > 0.5, 1, 0)
+
+# Actual values from the test set
+actual <- test$High_Performer
+
+# Create confusion matrix
+conf_matrix <- confusionMatrix(as.factor(pred_class), as.factor(actual))
+
+# Display confusion matrix
+print(conf_matrix)
+
+
+```
+```{r}
+#CONFUSION MATRIX ON TRAINING DATA
+
+# Predict probabilities on test data
+pred_prob <- predict(full_model, newdata = train, type = "response")
+
+# Convert probabilities to class labels (0 or 1) using a threshold of 0.5
+pred_class <- ifelse(pred_prob > 0.5, 1, 0)
+
+# Actual values from the test set
+actual <- train$High_Performer
+
+# Create confusion matrix
+conf_matrix <- confusionMatrix(as.factor(pred_class), as.factor(actual))
+
+# Display confusion matrix
+print(conf_matrix)
+```
+
+
+```{r}
+linear_step<-step(model1train, direction = "both")
+summary(linear_step)
+# Fit full linear regression model
+linear_full_model <- lm(CGPA ~ CGPA100 + CGPA200 + CGPA300 + CGPA400 + SGPA + Gender + Prog.Code,
+                        data = train)
+
+# Run stepwise selection and capture trace
+step_mod2 <- step(linear_full_model, direction = "both", trace = 1)
+
+# Check what the output looks like
+summary(step_mod2)
+
+```
+```{r}
+
+plot(step_mod2)
+```
+
+```{r}
+ggplot(model1train,aes(x=CGPA100,y=CGPA,col=Gender))+geom_point()+geom_line(aes(y=step_mod2$fit, col=Gender))
+```
+```{r}
+ggplot(model1train,aes(x=CGPA200,y=CGPA,col=Gender))+geom_point()+geom_line(aes(y=step_mod2$fit, col=Gender))
+```
+```{r}
+ggplot(model1train,aes(x=CGPA300,y=CGPA,col=Gender))+geom_point()+geom_line(aes(y=step_mod2$fit, col=Gender))
+```
+
+```{r}
+anova(model1train,model2train,model3train)
+```
+
+```{r}
+anova(model1test,model2test,model3test)
+```
+
+```{r}
+# Build Random Forest Classifier
+library(randomForest)
+rf_model <- randomForest(High_Performer ~ CGPA100 + CGPA200 + CGPA300 + CGPA400 + SGPA + Gender + Prog.Code,
+                         data = train, ntree = 500, mtry = 3, importance = TRUE)
+summary(rf_model)
+plot(rf_model)
+# Plot variable importance
+varImpPlot(rf_model, main = "Variable Importance - Random Forest"
+
+```
+```{r}
+library(pROC)
+# Predict class probabilities (for class = 1)
+rf_probs <- predict(rf_model, newdata = test, type = "prob")[, 2]
+
+roc_rf <- roc(test$High_Performer, rf_probs)
+
+auc(roc_rf)
+# Plot ROC curve
+plot(roc_rf, col = "blue", lwd = 2, main = "ROC Curve - Random Forest")
+abline(a = 0, b = 1, col = "gray", lty = 2)  # Diagonal line (random guess)
+
+```
+```{r}
+library(ggplot2)
+rf_probs <- predict(rf_model, newdata = train, type = "prob")[, 2]
+
+train$Pred_Prob <- predict(rf_model, newdata = train, type = "prob")[, 2]
+
+ggplot(train, aes(x = CGPA100, y = CGPA, color = Gender)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "loess", se = FALSE) +
+  labs(title = "Random Forest: Predicted Probability of High Performer (Train Set)",
+       x = "CGPA100",
+       y = "CGPA") +
+  theme_minimal()
+```
+```{r}
+rf_probs <- predict(rf_model, newdata = train, type = "prob")[, 2]
+
+train$Pred_Prob <- predict(rf_model, newdata = train, type = "prob")[, 2]
+
+ggplot(train, aes(x = CGPA200, y = CGPA, color = Gender)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "loess", se = FALSE) +
+  labs(title = "Random Forest: Predicted Probability of High Performer (Train Set)",
+       x = "CGPA200",
+       y = "CGPA") +
+  theme_minimal()
+```
+```{r}
+rf_probs <- predict(rf_model, newdata = train, type = "prob")[, 2]
+
+train$Pred_Prob <- predict(rf_model, newdata = train, type = "prob")[, 2]
+
+ggplot(train, aes(x = CGPA300, y = CGPA, color = Gender)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "loess", se = FALSE) +
+  labs(title = "Random Forest: Predicted Probability of High Performer (Train Set)",
+       x = "CGPA300",
+       y = "CGPA") +
+  theme_minimal()
+```
+```{r}
+rf_probs <- predict(rf_model, newdata = train, type = "prob")[, 2]
+
+train$Pred_Prob <- predict(rf_model, newdata = train, type = "prob")[, 2]
+
+ggplot(train, aes(x = CGPA400, y = CGPA, color = Gender)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "loess", se = FALSE) +
+  labs(title = "Random Forest: Predicted Probability of High Performer (Train Set)",
+       x = "CGPA400",
+       y = "CGPA") +
+  theme_minimal()
+```
+
+
+
+
+```{r}
+ggplot(train, aes(x = CGPA100<4, y = Pred_Prob, color = Gender)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "loess", se = FALSE) +
+  labs(title = "Random Forest: Predicted Probabilities by CGPA100",
+       x = "CGPA100", y = "Predicted Probability (High Performer)") +
+  scale_color_manual(values = c("red", "blue")) +
+  theme_minimal()
+
+```
+```{r}
+#Random forest Confusion Matrix on training data
+library(caret)
+rf_pred_class_train <- predict(rf_model, newdata = train)
+confusionMatrix(rf_pred_class_train, as.factor(train$High_Performer))
+
+```
+```{r}
+# Random Forest Confusion Matrix on test data
+rf_pred_class <- predict(rf_model, newdata = test)
+confusionMatrix(rf_pred_class, as.factor(test$High_Performer))
+
+```
+
+
